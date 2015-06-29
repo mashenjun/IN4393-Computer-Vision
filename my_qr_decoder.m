@@ -69,9 +69,9 @@ for i = bound(:,1) : bound(:,1)
     
 end
 
-%% useful here
+%% useful here add gray later
 
-QR = imread('input/input1.jpg');
+QR = imread('input/Hello.jpg');
 level = 0.5;
 QR_binary_invert = im2bw(255-QR,level);
 QR_binary = im2bw(QR,level);
@@ -111,7 +111,6 @@ for k = 1:NR
     end
 end
 
-XYLIMS = zeros(3,4);
 Point_outer = zeros(3,8);
 Point_outer_format2 = zeros(4,6);
 Point_outer_index = zeros(3,5);
@@ -130,7 +129,6 @@ Point_outer_format2(:,2*i-1:2*i) = pts(1:4,:);
 Point_outer_index(i,:) = [kmax(i) dUL dDL dDR dUR];
 h_pts = plot(pts(:,1),pts(:,2),'m','linewidth',3);
 
-XYLIMS(i,:) = [BBmax(1) + [0 BBmax(3)] BBmax(2) + [0 BBmax(4)]];
 end
 %% try connected components 
 
@@ -199,7 +197,7 @@ hold on ;
 for i=1:3
 temp_row = ordered_Point_outer_format2(:,2*i-1:2*i)';
 temp_row = temp_row(:)';
-new_4_point = repmat(temp_row,Harris_corner_detect_num,1);
+new_4_point = repmat(temp_row,size(new_QR_Corner,1),1);
 result = abs(new_QR_Corner - new_4_point);
 result=[sum(result(:,1:2),2),sum(result(:,3:4),2),sum(result(:,5:6),2),sum(result(:,7:8),2)];
 [~,I1]=min(result(:,1));
@@ -319,16 +317,28 @@ hold on;
 line(x2,y2);
 line(x3,y3)
 hold on;
-plot(x_intersect_F(1),x_intersect_F(2),'k*');
+plot(x_intersect_F(1),x_intersect_F(2),'m*');
 
 %% rotation correction 
+QR_Length_mean = mean([pdist([Lx,Ly;Bx,By]);pdist([Bx,By;x_intersect_F(1),x_intersect_F(2)]);...
+    pdist([x_intersect_F(1),x_intersect_F(2);Rx,Ry]);pdist([Rx,Ry;Lx,Ly])]);
+
+I_O_points_outer_block(5,:) = I_O_points_outer_block(1,:);
+QR_outer_length =zeros(4,3);
+for i=1:size(QR_outer_length,1)
+QR_outer_length(i,:) = [pdist(I_O_points_outer_block(i:i+1,1:2)),...
+    pdist(I_O_points_outer_block(i:i+1,3:4)),...
+    pdist(I_O_points_outer_block(i:i+1,5:6))];
+end
+QR_outer_length_mean = sum(sum(QR_outer_length))/12;
+version_size = round(QR_Length_mean/(QR_outer_length_mean/7));
 old_homo_set = [[Lx;Ly;1], [Bx;By;1], [x_intersect_F(1);x_intersect_F(2);1],[Rx;Ry;1]];
-new_homo_set = [[1;1;1],[1;200;1],[200;200;1],[200;1;1]];
+new_homo_set = [[1;1;1],[1;version_size*10;1],[version_size*10;version_size*10;1],[version_size*10;1;1]];
 H = homography2d(old_homo_set,new_homo_set);
-old_set_T = old_homo_set(1:2,:)';
-X_boundary = round([min(old_set_T(:,1))-1,max(old_set_T(:,1))+1]);
-Y_boundary = round([min(old_set_T(:,2))-1,max(old_set_T(:,2))]+1);
-MAX_boundary_dis = max(diff([X_boundary;Y_boundary],[],2));
+%old_set_T = old_homo_set(1:2,:)';
+%X_boundary = round([min(old_set_T(:,1))-1,max(old_set_T(:,1))+1]);
+%Y_boundary = round([min(old_set_T(:,2))-1,max(old_set_T(:,2))]+1);
+%MAX_boundary_dis = max(diff([X_boundary;Y_boundary],[],2));
 
 T = projective2d(H');
 %Correct_QR_b = imwarp(QR_binary_invert,T);
@@ -336,7 +346,7 @@ Correct_QR = imwarp(255-QR,T);
 
 imshow(Correct_QR);
 %% crop center image
-sample_C_QR = Correct_QR(1:265,1:180);
+%sample_C_QR = Correct_QR(1:265,1:180);
 total_Correct_QR = sum(sum(sum(Correct_QR/3)));
 P2X_Correct_QR = sum(sum(Correct_QR,3))/3;
 P2Y_Correct_QR = sum(sum(Correct_QR,3),2)/3;
@@ -346,17 +356,37 @@ Correct_QR_area = diff(P2X_Correct_QR_pos,[],2)*diff(P2Y_Correct_QR_pos,[],2);
 Thread_Correct_QR = total_Correct_QR/Correct_QR_area/255;
 %% convert to bw again 
 Correct_QR_b = im2bw(Correct_QR,Thread_Correct_QR);
+
 temp_C_QR_binary_invert = Correct_QR_b;
-CC = bwconncomp(temp_C_QR_binary_invert);
-numPixels = cellfun(@numel,CC.PixelIdxList);
+
+
+temp_C_QR_binary_invert_Corner_P = corner(temp_C_QR_binary_invert,'Harris');
+imshow(temp_C_QR_binary_invert);
+hold on
+C_patch_center = [mean(temp_C_QR_binary_invert_Corner_P(:,1)), mean(temp_C_QR_binary_invert_Corner_P(:,2))];
+plot(mean(C_patch_center(:,1)), mean(C_patch_center(:,2)), 'r*');
+C_patch_X = (max(temp_C_QR_binary_invert_Corner_P(:,1))- min(temp_C_QR_binary_invert_Corner_P(:,1)))/10;
+C_patch_Y = (max(temp_C_QR_binary_invert_Corner_P(:,2))- min(temp_C_QR_binary_invert_Corner_P(:,2)))/10;
+temp_C_QR_binary_invert(round(C_patch_center(2)-C_patch_Y):round(C_patch_center(2)+C_patch_Y),...
+    round(C_patch_center(1)-C_patch_X):round(C_patch_center(1)+C_patch_X)) = 0;
+imshow(temp_C_QR_binary_invert);
+hold on
+plot(mean(C_patch_center(:,1)), mean(C_patch_center(:,2)), 'r*');
+
+CCC = bwconncomp(temp_C_QR_binary_invert);
+numPixels = cellfun(@numel,CCC.PixelIdxList);
 [~,idx] = max(numPixels);
-temp_C_QR_binary_invert(CC.PixelIdxList{idx}) = 0;
+temp_C_QR_binary_invert(CCC.PixelIdxList{idx}) = 0;
 
 imshow(temp_C_QR_binary_invert);
 
+
+
+% maybe not usefull
 C_QR_Corner = corner(temp_C_QR_binary_invert,'Harris',Harris_corner_detect_num);
 hold on
 plot(C_QR_Corner(:,1), C_QR_Corner(:,2), 'r*');
+% end
 
 hold on;
 L = bwlabel(temp_C_QR_binary_invert);
@@ -417,7 +447,7 @@ C_grid_size = round(C_outer_length_mean/7);
 C_check = mod(C_QR_bound_box(3),C_grid_size);
 C_grid_num = round(C_QR_bound_box(3)/C_grid_size);
 if C_check~=0
-    C_QR_bound_box(3) = C_grid_num*C_grid_size;
+    C_QR_bound_box(3) = round(C_grid_num)*round(C_grid_size);
 end
 
 %% generate grid
@@ -444,4 +474,97 @@ imshow(Croped_Correct_QR_b);
 S_mat = (Croped_Correct_QR_b+1).*C_grid_sampler;
 new_S_mat = S_mat(any(S_mat,2),:);
 final_S_mat = new_S_mat(:,any(S_mat))-1;
-imshow(1-final_S_mat);
+
+%% find error correction and mask pattern 
+r_mask_S_mat = final_S_mat;
+err_mask_1 = final_S_mat(9,1:5);
+err_mask_2 = fliplr(final_S_mat(C_grid_num-4:C_grid_num,9)');
+err_mask = fix(mean([err_mask_1;err_mask_2]));
+type_mask = bi2de(xor(err_mask(:,3:5),[1,0,1]),'left-msb');
+if type_mask == 0
+    for i=1:size(r_mask_S_mat,1)
+        for j = 1:size(r_mask_S_mat,1)
+            if mod(i-1+j-1,2) == 0
+                r_mask_S_mat(i,j) = 1-r_mask_S_mat(i,j);
+            end
+        end
+    end
+elseif type_mask == 1
+    for i = 1:size(r_mask_S_mat,1)
+        if mod(i-1,2) ==0
+            r_mask_S_mat(1,:) = 1-r_mask_S_mat(1,:) ;
+        end
+    end
+elseif type_mask == 2
+    for j = 1:size(r_mask_S_mat,1)
+        if mod(j-1,3) ==0
+            r_mask_S_mat(:,j) = 1-r_mask_S_mat(:,j) ;
+        end
+    end
+elseif type_mask == 3
+    for i=1:size(r_mask_S_mat,1)
+        for j = 1:size(r_mask_S_mat,1)
+            if mod(i-1+j-1,3) == 0
+                r_mask_S_mat(i,j) = 1-r_mask_S_mat(i,j);
+            end
+        end
+    end
+elseif type_mask == 4
+    for i=1:size(r_mask_S_mat,1)
+        for j = 1:size(r_mask_S_mat,1)
+            if mod(floor(i/2)+floor(j/3),2) == 0
+                r_mask_S_mat(i,j) = 1-r_mask_S_mat(i,j);
+            end
+        end
+    end
+elseif type_mask == 5
+    for i=1:size(r_mask_S_mat,1)
+        for j = 1:size(r_mask_S_mat,1)
+            if mod(i*j,2)+mod(i*j,3) == 0
+                r_mask_S_mat(i,j) = 1-r_mask_S_mat(i,j);
+            end
+        end
+    end
+elseif type_mask == 6
+    for i=1:size(r_mask_S_mat,1)
+        for j = 1:size(r_mask_S_mat,1)
+            if mod((mod(i*j,2)+mod(i*j,3)),2) == 0
+                r_mask_S_mat(i,j) = 1-r_mask_S_mat(i,j);
+            end
+        end
+    end
+elseif type_mask == 7
+    for i=1:size(r_mask_S_mat,1)
+        for j = 1:size(r_mask_S_mat,1)
+            if mod((mod(i+j,2)+mod(i*j,3)),2) == 0
+                r_mask_S_mat(i,j) = 1-r_mask_S_mat(i,j);
+            end
+        end
+    end
+end
+
+%% encoding type 
+encoding_type = r_mask_S_mat(size(r_mask_S_mat,1)-1:size(r_mask_S_mat,1),size(r_mask_S_mat,1)-1:size(r_mask_S_mat,1))';
+encoding_type = fliplr(encoding_type(:)');
+version = round((size(r_mask_S_mat,1)-21)/4+1);
+length_data_mat =  r_mask_S_mat(C_grid_num-5:C_grid_num-2,C_grid_num-1:C_grid_num)';
+length_data = bi2de(length_data_mat(:)');
+
+Alignment = 0;
+if version == 1
+    type_UP_mat = [1,2;4,8;16,32;64,128];
+    type_DoWN_mat = [1,2;4,8;16,32;64,128];
+elseif version <7 && version >1
+else
+end
+
+%% test area
+qr_reader = QRCodeReader;
+try 
+    result = qr_reader.decode(final_S_mat);
+    parsedResult = ResultParser.parseResult(result);
+    message = char(result.getText());
+catch e
+    message = [];        
+end
+jimg = im2java2d(final_S_mat);
